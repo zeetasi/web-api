@@ -1,14 +1,16 @@
-const path = require('path');
 const express = require('express');
 const path = require('path');
-const db = require('./db');
 const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
 const session = require('express-session');
-const SQLiteStore = require('connect-sqlite3')(session);
+const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -17,11 +19,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 app.use(session({
-    store: new SQLiteStore({
-        db: 'sessions.db',
-        dir: process.env.VERCEL ? '/tmp' : './'
-    }),
-    secret: 'ganti-dengan-secret-key-yang-sangat-aman',
+    secret: 'ganti-dengan-secret-key-yang-sangat-aman-dan-panjang',
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -52,13 +50,15 @@ app.post('/register', async (req, res) => {
     }
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
-        const sql = 'INSERT INTO users (username, password_hash) VALUES (?, ?)';
-        db.run(sql, [username, hashedPassword], function(err) {
-            if (err) return res.render('register', { title: 'Register - Premium API', error: 'Username already taken.' });
-            res.redirect('/login');
-        });
-    } catch {
-        res.render('register', { title: 'Register - Premium API', error: 'An error occurred during registration.' });
+        const { error } = await supabase
+            .from('users')
+            .insert({ username: username, password_hash: hashedPassword });
+        
+        if (error) throw error;
+        
+        res.redirect('/login');
+    } catch (error) {
+        res.render('register', { title: 'Register - Premium API', error: 'Username already taken or server error.' });
     }
 });
 
@@ -66,47 +66,74 @@ app.get('/login', (req, res) => {
     res.render('login', { title: 'Login - Premium API', error: null });
 });
 
-app.post('/login', (req, res) => {
+app.post('/login', async (req, res) => {
     const { username, password } = req.body;
-    const sql = 'SELECT * FROM users WHERE username = ?';
-    db.get(sql, [username], async (err, user) => {
-        if (err || !user || !await bcrypt.compare(password, user.password_hash)) {
-            return res.render('login', { title: 'Login - Premium API', error: 'Invalid username or password.' });
-        }
+    try {
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('username', username)
+            .single();
+
+        if (error || !user) throw new Error('Invalid credentials');
+
+        const validPassword = await bcrypt.compare(password, user.password_hash);
+        if (!validPassword) throw new Error('Invalid credentials');
+
         req.session.userId = user.id;
         res.redirect('/dashboard');
-    });
+    } catch (error) {
+        res.render('login', { title: 'Login - Premium API', error: 'Invalid username or password.' });
+    }
 });
 
-app.get('/dashboard', requireLogin, (req, res) => {
-    const sql = 'SELECT id, username, api_key FROM users WHERE id = ?';
-    db.get(sql, [req.session.userId], (err, user) => {
-        if (err || !user) return res.redirect('/login');
+app.get('/dashboard', requireLogin, async (req, res) => {
+    try {
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('id, username, api_key')
+            .eq('id', req.session.userId)
+            .single();
+        
+        if (error || !user) throw new Error('User not found');
+        
         res.render('dashboard', { title: 'Dashboard', user: user });
-    });
+    } catch (error) {
+        res.redirect('/login');
+    }
 });
 
-app.post('/generate-key', requireLogin, (req, res) => {
+app.post('/generate-key', requireLogin, async (req, res) => {
     const newApiKey = uuidv4();
-    const sql = 'UPDATE users SET api_key = ? WHERE id = ?';
-    db.run(sql, [newApiKey, req.session.userId], () => res.redirect('/dashboard'));
+    await supabase
+        .from('users')
+        .update({ api_key: newApiKey })
+        .eq('id', req.session.userId);
+    res.redirect('/dashboard');
 });
 
 app.get('/logout', (req, res) => {
-    req.session.destroy(() => res.redirect('/login'));
+    req.session.destroy(() => {
+        res.redirect('/login');
+    });
 });
 
-const authenticateApiKey = (req, res, next) => {
+const authenticateApiKey = async (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
     if (token == null) return res.status(401).json({ status: 'error', message: 'API Key required' });
 
-    const sql = 'SELECT id, username FROM users WHERE api_key = ?';
-    db.get(sql, [token], (err, user) => {
-        if (err || !user) return res.status(403).json({ status: 'error', message: 'Invalid API Key' });
-        req.user = user;
-        next();
-    });
+    const { data: user, error } = await supabase
+        .from('users')
+        .select('id, username')
+        .eq('api_key', token)
+        .single();
+    
+    if (error || !user) {
+        return res.status(403).json({ status: 'error', message: 'Invalid API Key' });
+    }
+    req.user = user;
+    next();
 };
 
 app.get('/api/v1/check', authenticateApiKey, (req, res) => {

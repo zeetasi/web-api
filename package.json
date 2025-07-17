@@ -4,18 +4,16 @@
   "description": "Premium API Key management website for WhatsApp Bot",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js"
   },
-  "author": "zeetasi",
+  "author": "Your Name",
   "license": "ISC",
   "dependencies": {
+    "@supabase/supabase-js": "^2.26.0",
     "bcrypt": "^5.1.0",
-    "connect-sqlite3": "^0.9.13",
     "ejs": "^3.1.8",
     "express": "^4.18.2",
     "express-session": "^1.17.3",
-    "sqlite3": "^5.1.4",
     "uuid": "^9.0.0"
   }
 }
