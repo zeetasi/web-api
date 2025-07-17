@@ -1,0 +1,77 @@
+<%- include('partials/header', { title: 'Dashboard' }) %>
+
+<nav class="navbar">
+    <div class="container">
+        <a href="/dashboard" class="navbar-brand"><i class="fa-solid fa-rocket"></i> API Control Center</a>
+        <a href="/logout" class="btn-logout">Logout</a>
+    </div>
+</nav>
+
+<div class="container" style="max-width: 960px; margin: 2rem auto; padding: 0 2rem;">
+    <div class="dashboard-header">
+        <h2>Welcome, <%= user.username %>!</h2>
+        <p>This is your personal space to manage your API Key for our services.</p>
+    </div>
+
+    <div class="dashboard-card">
+        <div class="card-header">
+            <i class="fa-solid fa-key"></i> Your API Key
+        </div>
+        <% if (user.api_key) { %>
+            <div class="api-key-display">
+                <input type="text" class="api-key-input" value="<%= user.api_key %>" id="apiKey" readonly>
+                <button class="btn-copy" onclick="copyKey()" title="Copy to clipboard">
+                    <i class="fa-solid fa-copy"></i>
+                </button>
+            </div>
+        <% } else { %>
+            <p class="text-secondary-color">You haven't generated an API Key yet.</p>
+        <% } %>
+        
+        <form action="/generate-key" method="POST" style="margin-top: 1.5rem;">
+            <button type="submit" class="btn-custom">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <%= user.api_key ? 'Regenerate API Key' : 'Generate API Key' %>
+            </button>
+        </form>
+    </div>
+
+    <div class="dashboard-card">
+        <div class="card-header">
+            <i class="fa-solid fa-book-open"></i> How to Use
+        </div>
+        <p>To validate from your bot, send a GET request to the following endpoint and include your API Key in the Authorization header as a Bearer Token.</p>
+        <p><strong>Endpoint:</strong></p>
+        <pre><code>GET /api/v1/check</code></pre>
+        <p><strong>Header Example:</strong></p>
+        <pre><code>Authorization: Bearer <%= user.api_key || 'YOUR_API_KEY' %></code></pre>
+        <p><strong>Example with Axios (JavaScript):</strong></p>
+        <pre><code>const axios = require('axios');
+
+axios.get('https://your-domain.vercel.app/api/v1/check', {
+    headers: {
+        'Authorization': 'Bearer <%= user.api_key || 'YOUR_API_KEY' %>'
+    }
+})
+.then(res => console.log(res.data))
+.catch(err => console.error(err.response.data));</code></pre>
+    </div>
+</div>
+
+<script>
+    function copyKey() {
+        const apiKeyInput = document.getElementById('apiKey');
+        apiKeyInput.select();
+        apiKeyInput.setSelectionRange(0, 99999);
+        navigator.clipboard.writeText(apiKeyInput.value).then(() => {
+            const copyButton = document.querySelector('.btn-copy');
+            const originalIcon = copyButton.innerHTML;
+            copyButton.innerHTML = '<i class="fa-solid fa-check" style="color: #2ecc71;"></i>';
+            setTimeout(() => {
+                copyButton.innerHTML = originalIcon;
+            }, 2000);
+        });
+    }
+</script>
+
+<%- include('partials/footer') %>
