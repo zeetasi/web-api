@@ -39,31 +39,37 @@ app.get('/', (req, res) => {
     res.redirect(req.session.userId ? '/dashboard' : '/login');
 });
 
-app.get('/register', (req, res) => res.render('register', { error: null }));
+app.get('/register', (req, res) => {
+    res.render('register', { title: 'Register - Premium API', error: null });
+});
+
 app.post('/register', async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) {
-        return res.render('register', { error: 'Username and password are required.' });
+        return res.render('register', { title: 'Register - Premium API', error: 'Username and password are required.' });
     }
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
         const sql = 'INSERT INTO users (username, password_hash) VALUES (?, ?)';
         db.run(sql, [username, hashedPassword], function(err) {
-            if (err) return res.render('register', { error: 'Username already taken.' });
+            if (err) return res.render('register', { title: 'Register - Premium API', error: 'Username already taken.' });
             res.redirect('/login');
         });
     } catch {
-        res.render('register', { error: 'An error occurred during registration.' });
+        res.render('register', { title: 'Register - Premium API', error: 'An error occurred during registration.' });
     }
 });
 
-app.get('/login', (req, res) => res.render('login', { error: null }));
+app.get('/login', (req, res) => {
+    res.render('login', { title: 'Login - Premium API', error: null });
+});
+
 app.post('/login', (req, res) => {
     const { username, password } = req.body;
     const sql = 'SELECT * FROM users WHERE username = ?';
     db.get(sql, [username], async (err, user) => {
         if (err || !user || !await bcrypt.compare(password, user.password_hash)) {
-            return res.render('login', { error: 'Invalid username or password.' });
+            return res.render('login', { title: 'Login - Premium API', error: 'Invalid username or password.' });
         }
         req.session.userId = user.id;
         res.redirect('/dashboard');
@@ -74,7 +80,7 @@ app.get('/dashboard', requireLogin, (req, res) => {
     const sql = 'SELECT id, username, api_key FROM users WHERE id = ?';
     db.get(sql, [req.session.userId], (err, user) => {
         if (err || !user) return res.redirect('/login');
-        res.render('dashboard', { user: user });
+        res.render('dashboard', { title: 'Dashboard', user: user });
     });
 });
 
